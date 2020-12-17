@@ -18,6 +18,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 
 def add_Score(key, original, predicted, scores):
     
@@ -39,7 +41,7 @@ def add_Score(key, original, predicted, scores):
     return scores
 
 def add_Accuracy(key, original, predicted, metric):
-    Score = metrics.accuracy_score(original, predicted) # Da pra adicionar outras métricas aqui também.
+    Score = metrics.accuracy_score(original.values, predicted) # Da pra adicionar outras métricas aqui também.
     if key in metric:
         metric[key][1].append(Score)
     else:
@@ -47,7 +49,7 @@ def add_Accuracy(key, original, predicted, metric):
     return metric
 
 def add_PrecisionScore(key, original, predicted, metric):
-    Score = metrics.precision_score(original, predicted, average='binary', zero_division=0) # Da pra adicionar outras métricas aqui também.
+    Score = metrics.precision_score(original.values, predicted, average='binary', zero_division=0) # Da pra adicionar outras métricas aqui também.
     if key in metric:
         metric[key][1].append(Score)
     else:
@@ -55,7 +57,7 @@ def add_PrecisionScore(key, original, predicted, metric):
     return metric
 
 def add_MCCScore(key, original, predicted, metric):
-    Score = metrics.matthews_corrcoef(original, predicted) # Da pra adicionar outras métricas aqui também.
+    Score = metrics.matthews_corrcoef(original.values, predicted) # Da pra adicionar outras métricas aqui também.
     if key in metric:
         metric[key][1].append(Score)
     else:
@@ -63,7 +65,7 @@ def add_MCCScore(key, original, predicted, metric):
     return metric
 
 def add_RecallScore(key, original, predicted, metric):
-    Score = metrics.recall_score(original, predicted, average='binary') # Da pra adicionar outras métricas aqui também.
+    Score = metrics.recall_score(original.values, predicted, average='binary') # Da pra adicionar outras métricas aqui também.
     if key in metric:
         metric[key][1].append(Score)
     else:
@@ -71,7 +73,7 @@ def add_RecallScore(key, original, predicted, metric):
     return metric
 
 def add_F1Score(key, original, predicted, metric):
-    Score = metrics.f1_score(original, predicted, average='binary') # Da pra adicionar outras métricas aqui também.
+    Score = metrics.f1_score(original.values, predicted, average='binary') # Da pra adicionar outras métricas aqui também.
     if key in metric:
         metric[key][1].append(Score)
     else:
@@ -124,7 +126,7 @@ def convertToLaTeX(df, alignment="c"):
     output.write("\\end{tabular}")
     return output.getvalue()
 
-# df1 = pd.read_csv('diabetes_johndasilva_kaggle.csv')
+# df1 = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
 # df2 = pd.read_csv('diabetes.csv')
 # df = pd.concat([df1,df2], axis=0)
 
@@ -136,60 +138,98 @@ df.isnull().values.any() # Sem valores nulos para tratar
 # df = df.drop("Pregnancies", axis = 1)
 
 # Fit Data
-from sklearn.model_selection import KFold
-kf = KFold(n_splits=10)
+from sklearn.model_selection import LeaveOneOut
+kf = LeaveOneOut()
 
 X = df[df.columns[:-1]].values
 y = df[df.columns[-1]].values
 
+class_pos = "Outcome"
+X_train, X_test, y_train, y_test = train_test_split(
+    df.drop(class_pos, axis = 1),df[class_pos], test_size = 0.4, random_state = 1)
+
 Scores = dict()
 
-for train, test in kf.split(df):
-    X_train, y_train = X[train], y[train]
-    X_test, y_test = X[test], y[test]
+# Pré Processing
+X_train_n = preprocessing.MinMaxScaler().fit_transform(X_train)
+X_test_n = preprocessing.MinMaxScaler().fit_transform(X_test)
+
+# Classification
+
+plt.figure()
+lw = 2
+
+# Naive Bayes
+# model = MultinomialNB()
+model = GaussianNB()
+model.fit(X_train_n, y_train)
+predicted = model.predict(X_test_n)
+y_score = model.predict_proba(X_test_n)[:,1]
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_score)
+roc_auc = metrics.auc(fpr, tpr)
+add_Score("Naive Bayes", y_test, predicted, Scores)
+plt.plot(fpr, tpr, color='darkorange',
+         lw=2, label='ROC curve Naive Bayes (area = %0.2f)' % roc_auc)
+
+# SVM
+#model = svm.SVC(gamma=0.001, C=10000, kernel='rbf',random_state=1)
+model = svm.SVC(C=2, kernel='linear',random_state=1,probability=True)
+model.fit(X_train,y_train)
+predicted = model.predict(X_test)
+add_Score("SVM", y_test, predicted, Scores)
+y_score = model.predict_proba(X_test_n)[:,1]
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_score)
+roc_auc = metrics.auc(fpr, tpr)
+plt.plot(fpr, tpr, color='yellow',
+         lw=2, label='ROC curve SVM (area = %0.2f)' % roc_auc)
+
+# RF
+#model = RandomForestClassifier(max_depth = 5, n_estimators=500, random_state=1)
+model = RandomForestClassifier(n_estimators=500, n_jobs = -1, random_state=1,
+                               bootstrap = True, max_features = 'sqrt', max_depth = 5)
+model.fit(X_train,y_train)
+predicted = model.predict(X_test)
+add_Score("RF", y_test, predicted, Scores)
+y_score = model.predict_proba(X_test_n)[:,1]
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_score)
+roc_auc = metrics.auc(fpr, tpr)
+plt.plot(fpr, tpr, color='yellow',
+         lw=2, label='ROC curve RF (area = %0.2f)' % roc_auc)
     
-    # Pré Processing
-    X_train_n = preprocessing.MinMaxScaler().fit_transform(X_train)
-    X_test_n = preprocessing.MinMaxScaler().fit_transform(X_test)
+# KNN
+model = KNeighborsClassifier(n_neighbors=5, n_jobs = -1)
+model.fit(X_train_n,y_train)
+predicted = model.predict(X_test_n)
+add_Score("KNN", y_test, predicted, Scores)
+y_score = model.predict_proba(X_test_n)[:,1]
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_score)
+roc_auc = metrics.auc(fpr, tpr)
+plt.plot(fpr, tpr, color='yellow',
+         lw=2, label='ROC curve KNN (area = %0.2f)' % roc_auc)
     
-    # Classification
-    
-    # Naive Bayes
-    model = GaussianNB()
-    model.fit(X_train_n, y_train)
-    predicted = model.predict(X_test_n)
-    add_Score("Naive Bayes", y_test, predicted, Scores)
-    
-    # SVM
-    #model = svm.SVC(gamma=0.001, C=10000, kernel='rbf',random_state=1)
-    model = svm.SVC(C=2, kernel='linear',random_state=1)
-    model.fit(X_train,y_train)
-    predicted = model.predict(X_test)
-    add_Score("SVM", y_test, predicted, Scores)
-    
-    # RF
-    #model = RandomForestClassifier(max_depth = 5, n_estimators=500, random_state=1)
-    model = RandomForestClassifier(n_estimators=500, n_jobs = -1, random_state=1,
-                                   bootstrap = True, max_features = 'sqrt', max_depth = 5)
-    model.fit(X_train,y_train)
-    predicted = model.predict(X_test)
-    add_Score("RF", y_test, predicted, Scores)
-        
-    # KNN
-    model = KNeighborsClassifier(n_neighbors=5, n_jobs = -1)
-    model.fit(X_train_n,y_train)
-    predicted = model.predict(X_test_n)
-    add_Score("KNN", y_test, predicted, Scores)
-        
-    # MLP
-    model = MLPClassifier(hidden_layer_sizes=(16,32), activation='relu',
-                          solver='adam', max_iter=5000, random_state=1)
-    model.fit(X_train_n,y_train)
-    predicted = model.predict(X_test_n)
-    add_Score("MLP", y_test, predicted, Scores)
-    
+# MLP
+model = MLPClassifier(hidden_layer_sizes=(16,32), activation='relu',
+                      solver='adam', max_iter=5000, random_state=1)
+model.fit(X_train_n,y_train)
+predicted = model.predict(X_test_n)
+add_Score("MLP", y_test, predicted, Scores)
+y_score = model.predict_proba(X_test_n)[:,1]
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_score)
+roc_auc = metrics.auc(fpr, tpr)
+plt.plot(fpr, tpr, color='yellow',
+         lw=2, label='ROC curve MLP (area = %0.2f)' % roc_auc)
+
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic example')
+plt.legend(loc="lower right")
+plt.show()
+ 
 Scores = list(Scores.values())
-show_metric(Scores, ["accuracy"])
+# show_metric(Scores, ["accuracy"])
 show_metric(Scores)
 resultados = to_pandas(Scores)
 

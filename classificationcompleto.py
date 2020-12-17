@@ -130,8 +130,8 @@ def convertToLaTeX(df, alignment="c"):
 # df2 = pd.read_csv('diabetes.csv')
 # df = pd.concat([df1,df2], axis=0)
 
-df = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
-#df = pd.read_csv('diabetes.csv')
+#df = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
+df = pd.read_csv('diabetes.csv')
 df = shuffle(df, random_state=1)
 
 df.isnull().values.any() # Sem valores nulos para tratar
