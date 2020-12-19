@@ -126,6 +126,18 @@ def convertToLaTeX(df, alignment="c"):
     output.write("\\end{tabular}")
     return output.getvalue()
 
+def processing_zeros_to_mid_mean_mode(df, column):
+
+    value_key = df[column].mean()
+    value_key += df[column].median()
+    value_key += df[column].mode().values[0]
+    value_key /= 3 
+
+    df.loc[df[column] == 0, column] = round(value_key)
+    
+    return df
+
+
 # df1 = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
 # df2 = pd.read_csv('diabetes.csv')
 # df = pd.concat([df1,df2], axis=0)
@@ -133,6 +145,9 @@ def convertToLaTeX(df, alignment="c"):
 #df = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
 df = pd.read_csv('diabetes.csv')
 df = shuffle(df, random_state=1)
+
+# df = processing_zeros_to_mid_mean_mode(df, "BloodPressure")
+# df = processing_zeros_to_mid_mean_mode(df, "SkinThickness")
 
 df.isnull().values.any() # Sem valores nulos para tratar
 # df = df.drop("Pregnancies", axis = 1)

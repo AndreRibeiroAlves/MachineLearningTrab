@@ -17,6 +17,9 @@ Created on Mon Dec 14 16:42:56 2020
 #https://www.google.com/search?q=simple+roc+curve+python&oq=simple+roc+curve+python&aqs=chrome..69i57j33i22i29i30l7.4108j1j7&sourceid=chrome&ie=UTF-8
 #https://www.google.com/search?q=roc+curve+k+fold&oq=kfold+roc&aqs=chrome.1.69i57j0i8i13i30l3.4020j0j7&sourceid=chrome&ie=UTF-8
 
+#https://stackoverflow.com/questions/16476924/how-to-iterate-over-rows-in-a-dataframe-in-pandas
+#https://stackoverflow.com/questions/13851535/delete-rows-from-a-pandas-dataframe-based-on-a-conditional-expression-involving
+
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
@@ -30,8 +33,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.utils import shuffle
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split, GridSearchCV
 
 def add_Score(key, original, predicted, scores):
     
@@ -138,27 +140,43 @@ def convertToLaTeX(df, alignment="c"):
     output.write("\\end{tabular}")
     return output.getvalue()
 
+def processing_zeros_to_mid_mean_mode(df, column):
+
+    value_key = df[column].mean()
+    value_key += df[column].median()
+    value_key += df[column].mode().values[0]
+    value_key /= 3 
+
+    df.loc[df[column] == 0, column] = round(value_key)
+    
+    return df
+
 # df1 = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
 # df2 = pd.read_csv('diabetes.csv')
 # df = pd.concat([df1,df2], axis=0)
 
-df = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
-#df = pd.read_csv('diabetes.csv')
+#df = pd.read_csv('diabetes_johndasilva_kaggle.csv') #  hospital Frankfurt, Germany HFG
+df = pd.read_csv('diabetes.csv')
 df = shuffle(df, random_state=1)
+#df.reset_index(drop=True)
 
+df = processing_zeros_to_mid_mean_mode(df, "BloodPressure")
+df = processing_zeros_to_mid_mean_mode(df, "SkinThickness")
+df = processing_zeros_to_mid_mean_mode(df, "BMI")
+
+df = df.drop(df[(df.Glucose == 0) & (df.Insulin == 0)].index)
+    
 df.isnull().values.any() # Sem valores nulos para tratar
 # df = df.drop("Pregnancies", axis = 1)
 
 # Fit Data
-from sklearn.model_selection import LeaveOneOut
-kf = LeaveOneOut()
 
 X = df[df.columns[:-1]].values
 y = df[df.columns[-1]].values
 
 class_pos = "Outcome"
 X_train, X_test, y_train, y_test = train_test_split(
-    df.drop(class_pos, axis = 1),df[class_pos], test_size = 0.4, random_state = 1)
+    df.drop(class_pos, axis = 1),df[class_pos], test_size = 0.3, random_state = 1)
 
 Scores = dict()
 
@@ -173,42 +191,75 @@ fig, ax = plt.subplots()
 # Naive Bayes
 # model = MultinomialNB()
 model = GaussianNB()
+param_grid = {'var_smoothing': [0.00000001, 0.000000001, 0.00000001]}
+model = GridSearchCV(model, param_grid=param_grid, n_jobs=-1)
 model.fit(X_train_n, y_train)
 predicted = model.predict(X_test_n)
 add_Score("Naive Bayes", y_test, predicted, Scores)
 metrics.plot_roc_curve(model, X_test_n, y_test, name='ROC curve Naive Bayes', alpha=0.8, lw=1.2, ax=ax)
+print(metrics.confusion_matrix(y_test, predicted))
+
 # SVM
 #model = svm.SVC(gamma=0.001, C=10000, kernel='rbf',random_state=1)
-model = svm.SVC(C=2, kernel='linear',random_state=1)
+#model = svm.SVC(C=2, kernel='linear',random_state=1)
+model = svm.SVC()
+param_grid =  [{'kernel': ['rbf'], 'gamma': [1e-3, 1e-4],
+                     'C': [1, 10], 'random_state': [1]},
+               {'kernel': ['linear'], 'C': [1, 10], 'random_state': [1]}]
+model = GridSearchCV(model, param_grid=param_grid, n_jobs=-1)
 model.fit(X_train,y_train)
 predicted = model.predict(X_test)
 add_Score("SVM", y_test, predicted, Scores)
 metrics.plot_roc_curve(model, X_test, y_test, name='ROC curve SVM', alpha=0.8, lw=1.2, ax=ax)
+print(metrics.confusion_matrix(y_test, predicted))
 
 # RF
 #model = RandomForestClassifier(max_depth = 5, n_estimators=500, random_state=1)
-model = RandomForestClassifier(n_estimators=500, n_jobs = -1, random_state=1,
-                               bootstrap = True, max_features = 'sqrt', max_depth = 5)
+#model = RandomForestClassifier(n_estimators=500, n_jobs = -1, random_state=1,
+#                               bootstrap = True, max_features = 'sqrt', max_depth = 5)
+model = RandomForestClassifier()
+param_grid =  {'bootstrap': [True, False],
+               'max_depth': [5],
+               'max_features': ['auto', 'sqrt'],
+               'n_estimators': [200, 500],
+               'random_state': [1],
+               'n_jobs': [-1]}
+model = GridSearchCV(model, param_grid=param_grid, n_jobs=-1)
 model.fit(X_train,y_train)
 predicted = model.predict(X_test)
 add_Score("RF", y_test, predicted, Scores)
 metrics.plot_roc_curve(model, X_test, y_test, name='ROC curve RF', alpha=0.8, lw=1.2, ax=ax)
-    
+print(metrics.confusion_matrix(y_test, predicted))
+  
 # KNN
-model = KNeighborsClassifier(n_neighbors=5, n_jobs = -1)
+#model = KNeighborsClassifier(n_neighbors=5, n_jobs = -1)
+model = KNeighborsClassifier()
+param_grid =  {'n_neighbors': [3, 5],
+               'n_jobs': [-1]}
+model = GridSearchCV(model, param_grid=param_grid, n_jobs=-1)
 model.fit(X_train_n,y_train)
 predicted = model.predict(X_test_n)
 add_Score("KNN", y_test, predicted, Scores)
 metrics.plot_roc_curve(model, X_test_n, y_test, name='ROC curve KNN', alpha=0.8, lw=1.2, ax=ax)
-    
+print(metrics.confusion_matrix(y_test, predicted))
+
 # MLP
-model = MLPClassifier(hidden_layer_sizes=(16,32), activation='relu',
-                      solver='adam', max_iter=5000, random_state=1)
+#model = MLPClassifier(hidden_layer_sizes=(16,32), activation='relu',
+#                      solver='adam', max_iter=5000, random_state=1)
+
+model = MLPClassifier()
+param_grid =  {'hidden_layer_sizes': [(16,32)],
+               'activation': ['relu'],
+               'solver': ['adam'],
+               'max_iter': [2000, 5000],
+               'random_state': [1]}
+model = GridSearchCV(model, param_grid=param_grid, n_jobs=-1)
 model.fit(X_train_n,y_train)
 predicted = model.predict(X_test_n)
 add_Score("MLP", y_test, predicted, Scores)
 metrics.plot_roc_curve(model, X_test_n, y_test, name='ROC curve MLP', alpha=0.8, lw=1.2, ax=ax)
-    
+print(metrics.confusion_matrix(y_test, predicted))   
+
 ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', label='Chance', alpha=.8)
 
 ax.set(xlim=[-0.05, 1.05], ylim=[-0.05, 1.05],
