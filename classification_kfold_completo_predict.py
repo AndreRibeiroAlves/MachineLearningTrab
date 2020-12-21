@@ -167,8 +167,8 @@ df_test = df.iloc[split_mid:,:]
 df = df_crossval
 
 # Fit Data
-from sklearn.model_selection import KFold
-kf = KFold(n_splits=10)
+from sklearn.model_selection import StratifiedKFold
+kf =  StratifiedKFold(n_splits=10)
 
 X = df[df.columns[:-1]].values
 y = df[df.columns[-1]].values
@@ -176,7 +176,7 @@ y = df[df.columns[-1]].values
 Scores = dict()
 models = dict()
 
-for train, test in kf.split(df):
+for train, test in kf.split(X,y):
     X_train, y_train = X[train], y[train]
     X_test, y_test = X[test], y[test]
     
